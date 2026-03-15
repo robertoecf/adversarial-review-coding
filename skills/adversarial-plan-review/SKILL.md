@@ -1,9 +1,9 @@
 ---
 name: adversarial-plan-review
-description: "Cross-model adversarial review of implementation plans. Sends plans to an external model (Codex CLI / Gemini) for independent critique, then returns raw findings for the main session to synthesize."
-version: 0.3.0
+description: "Cross-model adversarial review of implementation plans. Sends plans to an external model (Codex CLI / Gemini) for independent critique, then synthesizes findings with Claude's own analysis."
+version: 0.3.1
 model: inherit
-allowed-tools: ["Read", "Grep", "Glob", "Bash", "Agent"]
+allowed-tools: ["Read", "Grep", "Glob", "Bash"]
 triggers:
   - "adversarial.?plan"
   - "review.?plan"
@@ -16,132 +16,118 @@ triggers:
 # Adversarial Plan Review
 
 Send the user's plan to an external model for independent adversarial
-critique, then synthesize the findings.
+critique, then synthesize the findings with your own analysis.
 
 ## Step 1: Extract the Plan
 
-Extract the raw plan text from the user's input. This is what gets sent
-to the external model. Store it mentally — you'll need it for the Agent prompt.
+Extract the raw plan text from the user's input.
 
-If no plan is provided: ask "What plan should I review? Paste it or point to a file."
+If no plan provided: ask "What plan should I review? Paste it or point to a file."
 If input is code: suggest `/adversarial-code-review` instead.
 
-## Step 2: Spawn Haiku Courier Agent
+## Step 2: Check External Model Availability
 
-Use the Agent tool to spawn a **haiku** subagent with ONLY the courier
-instructions and the filled template. This gives haiku a fresh, small
-context (~500 tokens) instead of inheriting the full conversation.
-
-```
-Agent(
-  model=haiku,
-  prompt="You are a CLI courier. Execute these steps exactly:
-
-1. Check Codex CLI availability:
-   Run: which codex && test -f ~/.codex/auth.json && echo CODEX || echo NO_CODEX
-
-2. If CODEX available, write this template to a file and run it:
-   Run: cat << 'EOF' > /tmp/cross-model-input.txt
-   You are a senior engineering lead and adversarial reviewer.
-   Review this implementation plan. Assume it will fail. Prove it.
-
-   ---
-   <PASTE THE FULL PLAN TEXT HERE>
-   ---
-
-   Validate for:
-   1. Scope alignment — does the plan match stated objectives? Scope creep? Under-scoped?
-   2. Missing steps — gaps in the implementation sequence? Testing? Migration?
-   3. Dependency ordering — can steps execute in stated order? Circular deps?
-   4. Rollback strategy — what happens if step N fails? Is each step reversible?
-   5. Blast radius — what existing functionality is at risk?
-   6. Success criteria — are there verifiable completion conditions?
-   7. Cost estimate — estimated complexity, files changed, test impact
-
-   Per finding provide:
-   - Severity: P0 (critical) / P1 (high) / P2 (medium) / P3 (low)
-   - Evidence: direct reference from the plan
-   - Problem: what's wrong and why it matters
-   - Recommendation: specific fix
-
-   Overall verdict: PROCEED / REVIEW_NEEDED / RETHINK
-   Provide an improved version of the plan incorporating all fixes.
-   EOF
-
-   Then run: timeout 120 codex exec --full-auto --ephemeral -o /tmp/cross-model-output.md \"$(cat /tmp/cross-model-input.txt)\"
-   Then run: cat /tmp/cross-model-output.md
-
-3. If CODEX unavailable, check Gemini:
-   Run: which gemini && test -f ~/.gemini/oauth_creds.json && echo GEMINI || echo NO_GEMINI
-   If GEMINI available, pipe the same template to:
-   gemini -p '' -y -m gemini-2.5-pro
-   and capture the output.
-
-4. If BOTH unavailable, return:
-   CROSS_MODEL_UNAVAILABLE: No external model CLI found.
-
-5. Clean up: rm -f /tmp/cross-model-input.txt /tmp/cross-model-output.md
-
-6. Return the FULL external model response unmodified, prefixed with which model was used (CODEX or GEMINI)."
-)
+```bash
+which codex && test -f ~/.codex/auth.json && echo "CODEX" || echo "NO_CODEX"
 ```
 
-**IMPORTANT**: Replace `<PASTE THE FULL PLAN TEXT HERE>` with the actual
-plan text from Step 1 before spawning the agent.
+If NO_CODEX:
+```bash
+which gemini && test -f ~/.gemini/oauth_creds.json && echo "GEMINI" || echo "NO_GEMINI"
+```
 
-### Context Limit Fallback
+If both unavailable: inform user, offer Claude-only plan review.
 
-If the haiku Agent fails due to context limits, retry with:
-1. `Agent(model=sonnet, ...)` — same prompt
-2. If sonnet also fails: `Agent(model=opus, ...)` — same prompt
-3. If all fail: run the Codex CLI commands directly in the main session
+## Step 3: Fill Template and Call External Model
 
-## Step 3: Receive and Present Results
+Write the filled template to a temp file:
 
-When the haiku agent returns, format the output as:
+```bash
+cat << 'TEMPLATE_EOF' > /tmp/cross-model-input.txt
+You are a senior engineering lead and adversarial reviewer.
+Review this implementation plan. Assume it will fail. Prove it.
+
+---
+<INSERT THE PLAN TEXT HERE>
+---
+
+Validate for:
+1. Scope alignment — does the plan match stated objectives? Scope creep? Under-scoped?
+2. Missing steps — gaps in the implementation sequence? Testing? Migration?
+3. Dependency ordering — can steps execute in stated order? Circular deps?
+4. Rollback strategy — what happens if step N fails? Is each step reversible?
+5. Blast radius — what existing functionality is at risk?
+6. Success criteria — are there verifiable completion conditions?
+7. Cost estimate — estimated complexity, files changed, test impact
+
+Per finding provide:
+- Severity: P0 (critical) / P1 (high) / P2 (medium) / P3 (low)
+- Evidence: direct reference from the plan
+- Problem: what's wrong and why it matters
+- Recommendation: specific fix
+
+Overall verdict: PROCEED / REVIEW_NEEDED / RETHINK
+Provide an improved version of the plan incorporating all fixes.
+TEMPLATE_EOF
+```
+
+**If Codex:**
+```bash
+timeout 120 codex exec --full-auto --ephemeral -o /tmp/cross-model-output.md "$(cat /tmp/cross-model-input.txt)"
+```
+
+**If Gemini:**
+```bash
+cat /tmp/cross-model-input.txt | gemini -p "" -y -m gemini-2.5-pro > /tmp/cross-model-output.md 2>/dev/null
+```
+
+## Step 4: Capture Response
+
+```bash
+cat /tmp/cross-model-output.md
+```
+
+If empty or error and primary was Codex: try Gemini fallback.
+If both fail: inform user, offer Claude-only review.
+
+## Step 5: Clean Up
+
+```bash
+rm -f /tmp/cross-model-input.txt /tmp/cross-model-output.md
+```
+
+## Step 6: Synthesize
+
+Present the external model's raw response, then cross-validate:
 
 ```markdown
-## Cross-Model Plan Review Results
-- **External model**: [GPT-5.4 via Codex CLI | Gemini 2.5 Pro | unavailable]
-- **Courier model**: [haiku | sonnet | opus | direct]
+## Cross-Model Plan Review
+- **External model**: [GPT-5.4 via Codex CLI | Gemini 2.5 Pro]
 - **Fallback used**: [no | yes — reason]
 
-### External Model Full Response
-[raw response from the agent, unmodified]
-```
+### External Model Findings
+[raw response, unmodified]
 
-Then proceed to Step 4.
+### Claude Cross-Validation
 
-## Step 4: Synthesize (Main Session)
+#### Cross-Validated (high confidence)
+[findings both Claude and the external model agree on]
 
-Now YOU (the main session model) review the original plan against the
-external model's findings:
+#### External-Only (needs review)
+[findings only the external model caught — with Claude's assessment]
 
-1. Run your own plan validation (scope, deps, rollback, blast radius, success criteria)
-2. Cross-validate:
-   - `[cross-validated]` — both you and the external model agree
-   - `[external-only]` — only the external model caught this
-   - `[claude-only]` — only you caught this
-   - `[severity disagreement]` — you disagree on severity (take the higher)
-3. Produce unified output:
+#### Claude-Only
+[findings only Claude caught that the external model missed]
 
-```markdown
-## Unified Plan Review
-- **Verdict**: PROCEED / REVIEW_NEEDED / RETHINK
-- **Findings**: [N total — X cross-validated, Y external-only, Z Claude-only]
+#### Severity Disagreements
+| Finding | External | Claude | Chosen |
+|---------|----------|--------|--------|
 
-### Cross-Validated Findings (high confidence)
-[findings both models agree on]
-
-### External-Only Findings (needs review)
-[findings only the external model caught]
-
-### Claude-Only Findings (needs review)
-[findings only Claude caught]
+### Unified Verdict: [PROCEED | REVIEW_NEEDED | RETHINK]
 
 ### Recommendations (priority-ordered)
-1. [most critical action]
-2. [next action]
+1. [most critical]
+2. [next]
 ```
 
 ## Error Paths
@@ -150,6 +136,6 @@ external model's findings:
 |-----------|----------|
 | No input | Ask for the plan |
 | Input is code | Suggest `/adversarial-code-review` |
-| All courier models fail (context) | Run Codex CLI directly in main session |
-| Codex + Gemini both unavailable | Inform user, offer Claude-only review |
-| External model returns empty | Report error, offer Claude-only review |
+| Codex + Gemini unavailable | Claude-only plan review |
+| Codex timeout | Try Gemini fallback |
+| External model returns empty | Try fallback, then Claude-only |
