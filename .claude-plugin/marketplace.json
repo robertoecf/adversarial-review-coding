@@ -1,0 +1,27 @@
+{
+  "name": "claude-code-review-subagents",
+  "owner": {
+    "name": "Roberto",
+    "email": "robertoecf@gmail.com"
+  },
+  "metadata": {
+    "description": "Review triad plugin for Claude Code: prompt optimization, adversarial red-team review, plan validation, and intelligent orchestration.",
+    "version": "0.1.0"
+  },
+  "plugins": [
+    {
+      "name": "claude-code-review-subagents",
+      "description": "Review triad: prompt optimization, adversarial red-team review, plan validation, and an orchestrator that routes reviews intelligently.",
+      "version": "0.1.0",
+      "source": "./",
+      "author": {
+        "name": "Roberto",
+        "email": "robertoecf@gmail.com"
+      },
+      "repository": "https://github.com/robertoecf/claude-code-review-subagents",
+      "license": "MIT",
+      "category": "security",
+      "keywords": ["review", "prompt", "adversarial", "plan", "code-quality"]
+    }
+  ]
+}
