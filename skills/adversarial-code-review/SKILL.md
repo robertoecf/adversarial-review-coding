@@ -1,9 +1,9 @@
 ---
 name: adversarial-code-review
-description: "Cross-model adversarial review of code, configs, and diffs. Sends code to an external model (Codex CLI / Gemini) for independent red-team analysis, then synthesizes findings with Claude's own analysis."
-version: 0.3.1
+description: "Cross-model adversarial review of code, configs, and diffs. Spawns a background subagent that calls Codex CLI / Gemini for external red-team analysis, synthesizes findings, and returns unified critics and recommendations."
+version: 0.4.0
 model: inherit
-allowed-tools: ["Read", "Grep", "Glob", "Bash"]
+allowed-tools: ["Read", "Grep", "Glob", "Bash", "Agent"]
 triggers:
   - "adversarial.?code"
   - "adversarial.?review"
@@ -17,160 +17,170 @@ triggers:
 
 # Adversarial Code Review
 
-Send the user's code to an external model for independent red-team
-analysis, then synthesize the findings with your own analysis.
+Spawn a background subagent that independently reviews code via an
+external model (Codex CLI / Gemini), cross-validates with its own analysis,
+and returns ONLY unified critics and recommendations.
 
-## Step 1: Resolve Input
+The main session is NOT blocked — it can continue working.
+
+## How to Execute
+
+### 1. Resolve the input
 
 - **Inline code**: use directly
-- **File path**: read with Read tool
-- **"review uncommitted"**: use `codex review --uncommitted` (skip template, go to Step 3b)
-- **"review --base main"**: use `codex review --base main` (skip template, go to Step 3b)
+- **File path**: read the file first, include the content
+- **"review uncommitted"**: note this for the agent (uses `codex review`)
+- **"review --base main"**: note this for the agent
 
 If no input: ask "What code should I review? Paste it, point to a file, or say 'review uncommitted'."
 If input is a plan: suggest `/adversarial-plan-review`.
 If input is a prompt: suggest `/prompt-optimize`.
 
-## Step 2: Check External Model Availability
+### 2. Spawn the background subagent
 
+Use the Agent tool with `run_in_background=true` and `model=sonnet`.
+
+```
+Agent(
+    # inherits main session model (opus by default)
+  run_in_background=true,
+  prompt=<see below>
+)
+```
+
+### Agent Prompt Template — Code Review
+
+Build the agent prompt by replacing `{CODE_TEXT}` with the actual code:
+
+---
+
+You are an adversarial code reviewer (red-team). Your job:
+1. Send this code to an external model for independent security/robustness analysis
+2. Run your own red-team analysis
+3. Cross-validate both analyses
+4. Return ONLY the final unified critics and recommendations
+
+## The Code to Review
+
+{CODE_TEXT}
+
+## Step 1: Call External Model
+
+Check availability and call the first available:
+
+Primary — Codex CLI:
 ```bash
 which codex && test -f ~/.codex/auth.json && echo "CODEX" || echo "NO_CODEX"
 ```
 
-If NO_CODEX:
-```bash
-which gemini && test -f ~/.gemini/oauth_creds.json && echo "GEMINI" || echo "NO_GEMINI"
-```
-
-If both unavailable: inform user, offer Claude-only code review.
-
-## Step 3a: Template Flow (for inline/file code)
-
-Write the filled template to a temp file:
-
+If CODEX available:
 ```bash
 cat << 'TEMPLATE_EOF' > /tmp/cross-model-input.txt
 You are a red-team security and reliability analyst.
 Assume everything will fail. Prove it with concrete exploit scenarios.
 
 Review this code for:
-
-1. SECURITY
-   - Injection: SQL, command, template, prompt injection
-   - Authentication/Authorization: missing auth, IDOR, privilege escalation
-   - Data exposure: PII in logs, secrets in config, error message leakage
-   - Input validation: missing sanitization, type confusion, boundary violations
-   - OWASP Top 10 systematic check
-
-2. ROBUSTNESS
-   - Race conditions: TOCTOU, concurrent access, async hazards
-   - Failure cascades: what breaks when dependency X is down?
-   - Resource exhaustion: unbounded loops, memory leaks, connection pool drain
-   - Timeout handling: missing timeouts, retry storms, no backoff
-
-3. COST
-   - API cost scaling: per-request costs at volume
-   - Token budgets: unbounded context, no max_tokens
-   - Storage growth: append-only, missing cleanup/TTL
-   - Compute: O(n^2) or worse on growing data
+1. SECURITY: injection, auth bypass, data exposure, OWASP top 10
+2. ROBUSTNESS: race conditions, failure cascades, resource exhaustion, timeouts
+3. COST: API scaling, token budgets, storage growth, compute complexity
 
 ---
-<INSERT THE CODE HERE>
+{CODE_TEXT}
 ---
 
-Per finding provide:
-- Severity: P0 (critical) / P1 (high) / P2 (medium) / P3 (low)
-- Attack/failure scenario: step-by-step path to exploitation or failure
-- Likelihood: low/medium/high with evidence
-- Impact: low/medium/high/critical with what breaks
-- Exploit difficulty: trivial/moderate/hard
-- Mitigation options A/B/C with effort and effectiveness
-- Recommendation: specific choice with reasoning
-
-If multiple findings combine into a worse scenario, document the exploit chain.
+Per finding: P0-P3 severity, step-by-step attack/failure scenario,
+likelihood, impact, exploit difficulty, mitigation A/B/C, recommendation.
+Document exploit chains where findings combine.
 TEMPLATE_EOF
-```
-
-**If Codex:**
-```bash
 timeout 120 codex exec --full-auto --ephemeral -o /tmp/cross-model-output.md "$(cat /tmp/cross-model-input.txt)"
-```
-
-**If Gemini:**
-```bash
-cat /tmp/cross-model-input.txt | gemini -p "" -y -m gemini-2.5-pro > /tmp/cross-model-output.md 2>/dev/null
-```
-
-## Step 3b: Git Review Flow
-
-```bash
-codex review --uncommitted 2>&1 | tee /tmp/cross-model-output.md
-```
-
-Or for branch diffs:
-```bash
-codex review --base main 2>&1 | tee /tmp/cross-model-output.md
-```
-
-## Step 4: Capture Response
-
-```bash
 cat /tmp/cross-model-output.md
-```
-
-If empty/error and primary was Codex: try Gemini fallback.
-If both fail: inform user, offer Claude-only review.
-
-## Step 5: Clean Up
-
-```bash
 rm -f /tmp/cross-model-input.txt /tmp/cross-model-output.md
 ```
 
-## Step 6: Synthesize
-
-Present the external model's raw response, then cross-validate:
-
-```markdown
-## Cross-Model Code Review
-- **External model**: [GPT-5.4 via Codex CLI | Gemini 2.5 Pro]
-- **Review mode**: [template | codex review --uncommitted | codex review --base]
-- **Fallback used**: [no | yes — reason]
-
-### External Model Findings
-[raw response, unmodified]
-
-### Claude Cross-Validation
-
-#### Cross-Validated (high confidence)
-[findings both Claude and the external model agree on]
-
-#### External-Only (needs review)
-[findings only the external model caught — with Claude's assessment]
-
-#### Claude-Only
-[findings only Claude caught that the external model missed]
-
-#### Exploit Chains
-[findings that combine into worse scenarios]
-
-#### Severity Disagreements
-| Finding | External | Claude | Chosen |
-|---------|----------|--------|--------|
-
-### Recommendations (priority-ordered)
-1. [most critical]
-2. [next]
+Fallback — Gemini CLI:
+```bash
+which gemini && test -f ~/.gemini/oauth_creds.json && echo "GEMINI" || echo "NO_GEMINI"
+```
+If GEMINI available, pipe the same template to:
+```bash
+cat /tmp/cross-model-input.txt | gemini -p "" -y -m gemini-2.5-pro
 ```
 
-## Error Paths
+If both unavailable: skip external model, do Claude-only analysis.
 
-| Condition | Response |
-|-----------|----------|
-| No input | Ask for code |
-| Input is a plan | Suggest `/adversarial-plan-review` |
-| Input is a prompt | Suggest `/prompt-optimize` |
-| Codex + Gemini unavailable | Claude-only code review |
-| Codex timeout | Try Gemini fallback |
-| External model returns empty | Try fallback, then Claude-only |
-| Code >2000 lines | Warn about cost, focus on highest-risk areas |
+### Agent Prompt Template — Git Review
+
+If the user said "review uncommitted" or "review --base main":
+
+---
+
+You are an adversarial code reviewer. Your job:
+1. Use Codex CLI's built-in review command
+2. Run your own analysis on the same diff
+3. Cross-validate and return unified findings
+
+## Step 1: Get the diff and external review
+
+```bash
+codex review --uncommitted 2>&1 | tee /tmp/cross-model-output.md
+cat /tmp/cross-model-output.md
+rm -f /tmp/cross-model-output.md
+```
+
+Also read the diff yourself:
+```bash
+git diff
+git diff --cached
+```
+
+---
+
+## Step 2: Your Own Analysis
+
+Independently review for:
+- Security: injection, auth, data exposure, OWASP top 10
+- Robustness: race conditions, failure cascades, resource exhaustion
+- Cost: scaling, token budgets, storage growth
+- Exploit chains: findings that combine into worse scenarios
+
+## Step 3: Cross-Validate
+
+- Agreements = `[cross-validated]` (high confidence)
+- Only external = `[external-only]` (flag for review)
+- Only you = `[claude-only]` (include with reasoning)
+- Severity disagreements = take the higher
+
+## Step 4: Return the Final Output
+
+Return ONLY this — no raw dumps, no intermediate steps:
+
+```markdown
+## Adversarial Code Review
+- **External model**: [GPT-5.4 via Codex | Gemini 2.5 Pro | Claude-only]
+- **Review mode**: [template | codex review --uncommitted | codex review --base]
+- **Findings**: [N total — X P0, Y P1, Z P2, W P3]
+
+### Critics (severity-ordered)
+
+#### [P0|P1|P2|P3]: Finding title [cross-validated | external-only | claude-only]
+- **Attack/failure scenario**: step-by-step
+- **Likelihood**: [low|medium|high]
+- **Impact**: [low|medium|high|critical]
+- **Recommendation**: specific fix with effort estimate
+
+[repeat for each finding]
+
+### Exploit Chains
+[findings that combine into worse scenarios]
+
+### Recommendations (priority-ordered)
+1. [most critical fix]
+2. [next fix]
+```
+
+---
+
+### 3. Inform the user
+
+After spawning the agent, tell the user:
+"Adversarial code review running in background via [Codex/Gemini]. You'll be notified when it completes."
