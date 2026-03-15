@@ -9,18 +9,23 @@ Review triad plugin for Claude Code: prompt optimization, adversarial red-team r
 | **Prompt Optimize** | `/prompt-optimize` | Analyze and optimize prompts, system instructions, skill definitions |
 | **Adversarial Review** | `/adversarial-review` | Red-team review: security holes, failure modes, race conditions, cost traps |
 | **Plan Review** | `/plan-review` | Validate implementation plans before execution |
+| **Codex Review** | `/codex-review` | Cross-model review via Codex CLI (GPT-5.4) — independent second opinion + disagreement analysis |
 | **Review All** | `/review-all` | Orchestrator — classifies input and routes to the right reviewer(s) |
 
 ## Install
 
 ```bash
-claude plugin install /path/to/claude-code-review-subagents
+# Add as a marketplace source, then install
+claude plugin marketplace add robertoecf/claude-code-review-subagents
+claude plugin install claude-code-review-subagents
 ```
 
-Or from GitHub:
+Or from a local clone:
 
 ```bash
-claude plugin install robertoecf/claude-code-review-subagents
+git clone https://github.com/robertoecf/claude-code-review-subagents.git
+claude plugin marketplace add /path/to/claude-code-review-subagents
+claude plugin install claude-code-review-subagents
 ```
 
 ## Usage
@@ -51,6 +56,17 @@ Modes: **Security** (OWASP, injection, auth), **Robustness** (race conditions, f
 ```
 
 Modes: **Validate** (full review), **Feasibility** (Codex-powered codebase check), **Quick Check** (lightweight for short plans).
+
+### Codex Review (Cross-Model)
+
+```
+/codex-review
+# Sends input to both Claude and Codex CLI (GPT-5.4) for independent analysis
+```
+
+Modes: **Code Review** (security + robustness), **Git Review** (`--uncommitted` or `--base`), **Prompt Review**, **Plan Review**, **Custom Query**.
+
+Requires [Codex CLI](https://github.com/openai/codex) with `codex login` completed. Gracefully falls back to Claude-only if unavailable.
 
 ### Review All (Orchestrator)
 

@@ -26,6 +26,7 @@ unified report. You do not review directly — you delegate and synthesize.
 | Implementation plan | Contains numbered steps, "plan:", references to files/modules to change, phase/step structure | `plan-review` |
 | Code/diff/config | Contains code syntax, diff markers (`+++`, `---`, `@@`), config file patterns (JSON/YAML with non-instruction content) | `adversarial-review` |
 | Mixed content | Multiple types detected | Decompose → route each part separately |
+| "cross-model" or "codex" requested | User explicitly asks for cross-model review | `codex-review` (can combine with any other reviewer) |
 | Ambiguous | Can't classify | Ask the user which review type they want |
 
 ### Classification Rules
@@ -43,6 +44,7 @@ unified report. You do not review directly — you delegate and synthesize.
 | Code + Plan | `plan-review` ∥ `adversarial-review` (parallel) | Independent analyses, use Agent tool for parallel execution |
 | Prompt + Code | `prompt-optimize` ∥ `adversarial-review` (parallel) | Independent analyses |
 | "full review" explicit | `prompt-optimize` → `plan-review` → `adversarial-review` | Sequential, each builds on prior |
+| Any + "cross-model" | Add `codex-review` in parallel with the primary reviewer | Cross-model validation via Codex CLI (GPT-5.4) |
 | Single type detected | Route to single reviewer directly | Skip orchestrator overhead |
 
 ### Parallel Execution
@@ -111,6 +113,7 @@ Total budget = orchestrator overhead + sum of invoked reviewer budgets.
 | Single reviewer | 300 + reviewer budget |
 | Two reviewers parallel | 300 + both reviewer budgets |
 | Full sequential review | 300 + 1500 + 1200 + 3000 = 5300 max |
+| Any + codex-review | 300 + reviewer budget + 2000 (codex) |
 
 ## Error Paths
 

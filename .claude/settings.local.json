@@ -3,7 +3,11 @@
     "allow": [
       "Bash(which codex)",
       "Bash(test -f *)",
-      "Bash(codex -q *)"
+      "Bash(codex exec *)",
+      "Bash(codex review *)",
+      "Bash(timeout 120 codex *)",
+      "Bash(cat /tmp/codex-review-output.md)",
+      "Bash(rm -f /tmp/codex-review-*)"
     ]
   }
 }
