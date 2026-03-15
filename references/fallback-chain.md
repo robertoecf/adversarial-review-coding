@@ -51,22 +51,23 @@ which gemini && test -f ~/.gemini/oauth_creds.json && echo "GEMINI" || echo "NO_
 
 | Priority | Model ID | Tier |
 |----------|----------|------|
-| 1 | `gemini-3.1-pro-preview` | Most capable |
-| 2 | `gemini-2.5-pro` | Advanced reasoning |
-| 3 | `gemini-2.5-flash` | Fast, balanced |
-| 4 | `gemini-3.1-flash-lite-preview` | Budget fallback |
+| 1 | `gemini-3.1-pro-preview` | 3.1 family best |
+| 2 | `gemini-3.1-flash-lite-preview` | 3.1 family lite |
+| 3 | `gemini-2.5-pro` | 2.5 family best |
+| 4 | `gemini-2.5-flash` | 2.5 family lite |
 
 ### Invocation
 ```bash
 cat /tmp/cross-model-input.txt | timeout 120 gemini -p "" -y -m gemini-3.1-pro-preview > /tmp/cross-model-output.md 2>/dev/null
 ```
 
-If the command fails or output is empty, try the next model:
-```bash
-cat /tmp/cross-model-input.txt | timeout 120 gemini -p "" -y -m gemini-2.5-pro > /tmp/cross-model-output.md 2>/dev/null
-```
+If the command fails or output is empty, try the next model in order:
+1. `gemini-3.1-pro-preview`
+2. `gemini-3.1-flash-lite-preview`
+3. `gemini-2.5-pro`
+4. `gemini-2.5-flash`
 
-Continue down the cascade until one succeeds or all fail.
+Stop at the first that succeeds.
 
 **If any Gemini model succeeds → STOP.**
 
