@@ -8,5 +8,6 @@
   },
   "repository": "https://github.com/robertoecf/claude-code-review-subagents",
   "license": "MIT",
-  "keywords": ["review", "prompt", "adversarial", "plan", "code-quality"]
+  "keywords": ["review", "prompt", "adversarial", "plan", "code-quality"],
+  "skills": "./skills/"
 }
