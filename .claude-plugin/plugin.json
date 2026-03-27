@@ -1,12 +1,12 @@
 {
-  "name": "claude-code-review-subagents",
-  "version": "0.2.0",
-  "description": "Cross-model adversarial review plugin: sends plans and code to external models (Codex CLI, Gemini CLI) for independent analysis, with Claude performing synthesis.",
+  "name": "adversarial-review-coding",
+  "version": "0.3.0",
+  "description": "Adversarial review plugin for coding workflows. Spawns background subagents that call external models (Codex CLI, Gemini CLI) for independent red-team analysis, cross-validates against Claude, and returns unified findings.",
   "author": {
     "name": "Roberto",
     "email": "robertoecf@gmail.com"
   },
-  "repository": "https://github.com/robertoecf/claude-code-review-subagents",
+  "repository": "https://github.com/robertoecf/adversarial-review-coding",
   "license": "MIT",
   "keywords": ["review", "prompt", "adversarial", "plan", "code-quality"],
   "skills": "./skills/"

@@ -21,7 +21,7 @@ and tell the main session which skill to invoke. You do NOT review.
 | Input Type | Detection Heuristic | Route To |
 |------------|---------------------|----------|
 | Implementation plan | Contains numbered steps, "plan:", phase/step structure, references to files/modules to change | `adversarial-plan-review` |
-| Code/diff/config | Contains code syntax, function definitions, diff markers (`+++`, `---`, `@@`), config file patterns | `adversarial-code-review` |
+| Code/diff/config | Contains code syntax, function definitions, diff markers (`+++`, `---`, `@@`), config file patterns | `coding-adversarial-review` |
 | Prompt/instruction | Contains "you are", "system prompt", instruction-like language, YAML frontmatter with `triggers:` | `prompt-optimize` |
 | Mixed content | Multiple types detected | Identify dominant type, route there. Note secondary types. |
 | Ambiguous | Can't classify | Ask the user which review type they want |
@@ -39,7 +39,7 @@ and tell the main session which skill to invoke. You do NOT review.
 ## Input Classification
 - **Detected type**: [plan | code | prompt | mixed]
 - **Confidence**: [high | medium | low]
-- **Routing to**: `/adversarial-plan-review` | `/adversarial-code-review` | `/prompt-optimize`
+- **Routing to**: `/adversarial-plan-review` | `/coding-adversarial-review` | `/prompt-optimize`
 - **Reason**: [one sentence explaining why this classification]
 
 The main session should now invoke the skill above with the original input.

@@ -1,5 +1,5 @@
 ---
-name: adversarial-code-review
+name: coding-adversarial-review
 description: "Cross-model adversarial review of code, configs, and diffs. Spawns a background subagent that calls Codex CLI / Gemini for external red-team analysis, synthesizes findings, and returns unified critics and recommendations."
 version: 0.4.0
 model: inherit

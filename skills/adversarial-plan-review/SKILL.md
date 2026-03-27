@@ -26,7 +26,7 @@ The main session is NOT blocked — it can continue working.
 ### 1. Extract the plan text from the user's input
 
 If no plan: ask "What plan should I review? Paste it or point to a file."
-If input is code: suggest `/adversarial-code-review` instead.
+If input is code: suggest `/coding-adversarial-review` instead.
 
 ### 2. Spawn the background subagent
 

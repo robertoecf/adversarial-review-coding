@@ -1,10 +1,10 @@
 # CLAUDE.md — Claude Code Directives
 
-## Plugin: claude-code-review-subagents v0.4.2
+## Plugin: adversarial-review-coding v0.3.0
 
-Cross-model adversarial review plugin. Uses external AI models (Codex CLI,
-Gemini CLI) for independent code and plan analysis, with the main session
-performing synthesis.
+Adversarial review plugin for coding workflows. Spawns background subagents
+that call external models (Codex CLI, Gemini CLI) for independent red-team
+analysis, cross-validates against Claude, and returns unified findings.
 
 ## Architecture
 
@@ -31,7 +31,7 @@ performing synthesis.
 ## Available Skills
 
 - `/adversarial-plan-review` — background agent: Codex/Gemini critique → cross-validate → revised plan
-- `/adversarial-code-review` — background agent: Codex/Gemini red-team → cross-validate → critics
+- `/coding-adversarial-review` — background agent: Codex/Gemini red-team → cross-validate → critics
 - `/prompt-optimize` — prompt analysis and optimization (runs on main session model)
 - `/review-all` — router that classifies input and suggests the right skill
 
@@ -44,10 +44,10 @@ Call ONLY the first available. Stop at first success.
 
 ## Plugin Dev Workflow
 
-- Edit source at `/Users/mac/Documents/Repos/claude-plugins/claude-code-review-subagents/`
-- Copy to cache: `cp <src>/skills/*/SKILL.md ~/.claude/plugins/cache/claude-code-review-subagents/claude-code-review-subagents/0.2.0/skills/*/`
+- Edit source at `/Users/mac/Documents/Repos/claude-plugins/adversarial-review-coding/`
+- Copy to cache: `cp <src>/skills/*/SKILL.md ~/.claude/plugins/cache/adversarial-review-coding/adversarial-review-coding/0.3.0/skills/*/`
 - Reload: `/reload-plugins`
-- Skill invocation requires fully qualified name: `claude-code-review-subagents:adversarial-plan-review`
+- Skill invocation requires fully qualified name: `adversarial-review-coding:coding-adversarial-review`
 - Install via marketplace: `claude plugin marketplace add <path>` then `claude plugin install <name>`
 
 ## File Size Discipline

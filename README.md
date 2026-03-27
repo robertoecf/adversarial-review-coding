@@ -1,87 +1,54 @@
-# claude-code-review-subagents
+# adversarial-review-coding
 
-Cross-model adversarial review plugin for Claude Code. Spawns background subagents that call external AI models (Codex CLI, Gemini CLI), run independent analysis, cross-validate, and return only the final reviewed output.
+## Adversarial Review with LLMs
 
-## Architecture Diagram
+Adversarial review is the practice of submitting work to an independent model for red-team analysis, then cross-validating the findings against your primary model's own assessment. Two models examining the same artifact from different angles catch more issues than either alone — each has different training biases, blind spots, and reasoning patterns. Disagreements between models surface the highest-value findings: the ones a single reviewer would miss.
 
-[![Architecture](https://excalidraw.com/og/5S7Pzstx9npv10zCbtwkV)](https://excalidraw.com/#json=5S7Pzstx9npv10zCbtwkV,AJzXgdXVwoc3ojldcMgGZA)
+This plugin applies adversarial review to **coding workflows** inside [Claude Code](https://docs.anthropic.com/en/docs/claude-code). It spawns background subagents that call external models (Codex CLI / Gemini CLI), cross-validate against Claude's analysis, and return unified findings — without blocking your main session. The result: security vulnerabilities, logic errors, and architectural gaps caught earlier, with higher confidence, and with clear severity ratings.
 
-> [Open full diagram in Excalidraw](https://excalidraw.com/#json=5S7Pzstx9npv10zCbtwkV,AJzXgdXVwoc3ojldcMgGZA)
-
-### Adversarial Plan Review Flow
+## How It Works
 
 ```
 Main Session (Opus) ─── continues working, not blocked
        │
-       └─► spawns Agent(run_in_background, inherit=opus)
+       └─► spawns background Agent
                 │
-                ├─ 1. Fill template with plan
-                ├─ 2. Codex CLI (GPT-5.4)  ◄── primary
-                │     └─ fallback: Gemini CLI (2.5 Pro)
-                │           └─ fallback: Claude-only
-                ├─ 3. Get external model findings
-                ├─ 4. Run own adversarial analysis
-                ├─ 5. Cross-validate both
+                ├─ 1. Send artifact to external model (Codex/Gemini)
+                ├─ 2. Run independent Claude analysis
+                ├─ 3. Cross-validate both sets of findings
                 │     ├─ [cross-validated] = high confidence
-                │     ├─ [external-only]  = needs review
-                │     └─ [claude-only]    = needs review
-                └─ 6. Return ONLY:
-                       ├─ Revised plan (incorporating all fixes)
-                       ├─ Critics (P0-P3 severity-ordered)
-                       └─ Recommendations (priority-ordered)
-```
-
-### Adversarial Code Review Flow
-
-```
-Main Session (Opus) ─── continues working, not blocked
-       │
-       └─► spawns Agent(run_in_background, inherit=opus)
-                │
-                ├─ 1. Resolve input (code / file / git diff)
-                ├─ 2. Codex CLI or `codex review --uncommitted`
-                │     └─ fallback: Gemini CLI
-                ├─ 3. Get external red-team findings
-                ├─ 4. Run own security/robustness/cost analysis
-                ├─ 5. Cross-validate + find exploit chains
-                └─ 6. Return ONLY:
-                       ├─ Critics (P0-P3, attack scenarios)
-                       ├─ Exploit chains
-                       └─ Recommendations (priority-ordered)
-```
-
-### Prompt Optimize Flow
-
-```
-Main Session (inherit model) ─── runs inline, no subagent
-       │
-       ├─ 1. Analyze prompt (clarity, specificity, edge cases,
-       │      token efficiency, conflicts, structure)
-       ├─ 2. No external model call (Claude-native)
-       └─ 3. Return:
-              ├─ Issues found (P0-P3)
-              ├─ Optimized version
-              ├─ Diff
-              └─ Change log with reasoning
+                │     ├─ [external-only]  = flagged for review
+                │     └─ [claude-only]    = flagged for review
+                └─ 4. Return unified output (P0-P3 severity)
 ```
 
 ## Skills
 
-| Skill | Model | What it does |
-|-------|-------|-------------|
-| `/adversarial-plan-review` | inherit | Background agent: Codex/Gemini critique → cross-validate → revised plan |
-| `/adversarial-code-review` | inherit | Background agent: Codex/Gemini red-team → cross-validate → unified critics |
-| `/prompt-optimize` | inherit | Inline: analyze and optimize prompts (no external model) |
-| `/review-all` | haiku | Classifies input type and routes to the correct skill |
+| Skill | What it does |
+|-------|-------------|
+| `/coding-adversarial-review` | Red-team code, configs, and diffs. Returns security/robustness critics with exploit chains. |
+| `/adversarial-plan-review` | Critique implementation plans. Returns a revised plan with risk analysis. |
+| `/prompt-optimize` | Analyze and optimize prompts for clarity, token efficiency, and conflicts. Runs inline (no external model). |
+| `/review-all` | Lightweight router — classifies your input (code, plan, or prompt) and routes to the correct skill. |
+
+## External Model Fallback Chain
+
+The plugin calls **one** external model per review (first available wins):
+
+```
+1. Codex CLI (GPT-5.4)    ◄── primary
+2. Gemini CLI              ◄── fallback (3.1-pro → 3.1-flash-lite → 2.5-pro → 2.5-flash)
+3. Claude-only analysis    ◄── last resort
+```
 
 ## Install
 
 ```bash
-claude plugin marketplace add robertoecf/claude-code-review-subagents
-claude plugin install claude-code-review-subagents
+claude plugin marketplace add robertoecf/adversarial-review-coding
+claude plugin install adversarial-review-coding
 ```
 
-## Prerequisites
+### Prerequisites
 
 At least one external model CLI must be authenticated:
 
@@ -89,50 +56,24 @@ At least one external model CLI must be authenticated:
 # Primary: Codex CLI (GPT-5.4)
 codex login
 
-# Fallback: Gemini CLI (gemini-2.5-pro)
+# Fallback: Gemini CLI
 gemini auth login
 ```
 
 ## Usage
 
-### Plan Review
-```
-/adversarial-plan-review
-# Paste your implementation plan — runs in background
-```
-
-### Code Review
-```
-/adversarial-code-review
-# Paste code, point to files, or say "review uncommitted"
+```bash
+/coding-adversarial-review          # paste code, point to files, or "review uncommitted"
+/adversarial-plan-review            # paste your implementation plan
+/prompt-optimize                    # paste a system prompt or skill definition
+/review-all                         # paste anything — auto-routes to the right skill
 ```
 
-### Prompt Optimization
-```
-/prompt-optimize
-# Paste your system prompt or SKILL.md
-```
+## Architecture Diagram
 
-### Auto-Route
-```
-/review-all
-# Paste anything — classifies and routes to the right skill
-```
+[![Architecture](https://excalidraw.com/og/5S7Pzstx9npv10zCbtwkV)](https://excalidraw.com/#json=5S7Pzstx9npv10zCbtwkV,AJzXgdXVwoc3ojldcMgGZA)
 
-## Fallback Chain
-
-```
-1. Codex CLI (GPT-5.4, reasoning: high) ◄── primary
-2. Gemini CLI (gemini-2.5-pro)          ◄── fallback
-3. Claude-only analysis                  ◄── last resort
-```
-
-## Output
-
-The background subagent does ALL the work and returns only the final output:
-- **Plan review**: revised plan + critics + recommendations
-- **Code review**: unified critics + exploit chains + recommendations
-- No raw dumps, no intermediate steps — just the reviewed result
+> [Open full diagram in Excalidraw](https://excalidraw.com/#json=5S7Pzstx9npv10zCbtwkV,AJzXgdXVwoc3ojldcMgGZA)
 
 ## License
 
